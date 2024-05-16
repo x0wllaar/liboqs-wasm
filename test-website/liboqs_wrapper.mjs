@@ -1,7 +1,6 @@
 let primitives = null;
 
 const OQS_SUCCESS = 0;
-const size_t_len = 4;
 
 const CreateLibOQSPrimitives = async () => {
     const mod = await CreateLibOQS();
@@ -10,6 +9,7 @@ const CreateLibOQSPrimitives = async () => {
         //Memory
         malloc: mod.cwrap('malloc', 'number', ['number']),
         free: mod.cwrap('free', 'void', ['number']),
+        sizeof_size_t: mod.cwrap('sizeof_size_t', 'number', []),
         OQS_MEM_secure_free: mod.cwrap('OQS_MEM_secure_free', 'void', ['number', 'number']),
         OQS_MEM_insecure_free: mod.cwrap('OQS_MEM_insecure_free', 'void', ['number']),
 
@@ -68,10 +68,11 @@ export class OQSKem {
         }
         
         //We interrogate the KEM to get the lengths of the keys and ciphertexts
-        this.lenSK = this.primitives.OQS_KEM_get_length_secret_key(cKem);
-        this.lenPK = this.primitives.OQS_KEM_get_length_public_key(cKem);
-        this.lenCT = this.primitives.OQS_KEM_get_length_ciphertext(cKem);
-        this.lenSS = this.primitives.OQS_KEM_get_length_shared_secret(cKem);
+        this.lenSK = Number(this.primitives.OQS_KEM_get_length_secret_key(cKem));
+        this.lenPK = Number(this.primitives.OQS_KEM_get_length_public_key(cKem));
+        this.lenCT = Number(this.primitives.OQS_KEM_get_length_ciphertext(cKem));
+        this.lenSS = Number(this.primitives.OQS_KEM_get_length_shared_secret(cKem));
+        this.size_t_size = this.primitives.sizeof_size_t();
 
         this.primitives.OQS_KEM_free(cKem)
     }
@@ -90,17 +91,25 @@ export class OQSKem {
         return ptr;
     }
 
+    correctSizeT(val){
+        if (this.size_t_size === 4) {
+            return val;
+        } else {
+            return BigInt(val);
+        }
+    }
+
     //This is a helper function to allocate memory on the heap and schedule it to be zeroed out and freed
     secureMalloc(size, cleanupStack) {
         const ptr = this.malloc(size);
-        cleanupStack.push(() => this.primitives.OQS_MEM_secure_free(ptr, size));
+        cleanupStack.push(() => this.primitives.OQS_MEM_secure_free(this.correctSizeT(ptr), this.correctSizeT(size)));
         return ptr;
     }
 
     //This is a helper function to allocate memory on the heap and schedule it to be freed
     newKemInstance(cleanupStack) {
         const kem = this.primitives.OQS_KEM_new(this.name);
-        if (kem === 0) {
+        if (kem === this.correctSizeT(0)) {
             throw new Error('Failed to create KEM, not supported by liboqs');
         }
         cleanupStack.push(() => this.primitives.OQS_KEM_free(kem));
@@ -114,7 +123,10 @@ export class OQSKem {
             const publicKeyPtr = this.secureMalloc(this.lenPK, cleanupStack);
             const secretKeyPtr = this.secureMalloc(this.lenSK, cleanupStack);
             
-            if (this.primitives.OQS_KEM_keypair(kem, publicKeyPtr, secretKeyPtr) !== OQS_SUCCESS) {
+            if (this.primitives.OQS_KEM_keypair(
+                this.correctSizeT(kem), 
+                this.correctSizeT(publicKeyPtr), 
+                this.correctSizeT(secretKeyPtr)) !== OQS_SUCCESS) {
                 throw new Error('Failed to generate keypair');
             }
 
@@ -145,7 +157,12 @@ export class OQSKem {
 
             this.primitives.HEAPU8.set(publicKey, publicKeyPtr);
 
-            if (this.primitives.OQS_KEM_encaps(kem, ciphertextPtr, sharedSecretPtr, publicKeyPtr) !== OQS_SUCCESS) {
+            if (this.primitives.OQS_KEM_encaps(
+                    this.correctSizeT(kem), 
+                    this.correctSizeT(ciphertextPtr), 
+                    this.correctSizeT(sharedSecretPtr), 
+                    this.correctSizeT(publicKeyPtr)
+                ) !== OQS_SUCCESS) {
                 throw new Error('Failed to encapsulate');
             }
 
@@ -179,7 +196,12 @@ export class OQSKem {
             this.primitives.HEAPU8.set(secretKey, secretKeyPtr);
             this.primitives.HEAPU8.set(ciphertext, ciphertextPtr);
 
-            if (this.primitives.OQS_KEM_decaps(kem, sharedSecretPtr, ciphertextPtr, secretKeyPtr) !== OQS_SUCCESS) {
+            if (this.primitives.OQS_KEM_decaps(
+                    this.correctSizeT(kem), 
+                    this.correctSizeT(sharedSecretPtr), 
+                    this.correctSizeT(ciphertextPtr), 
+                    this.correctSizeT(secretKeyPtr)
+                ) !== OQS_SUCCESS) {
                 throw new Error('Failed to encapsulate');
             }
 
@@ -235,9 +257,10 @@ export class OQSSig {
         }
         
         //We interrogate the SIG to get the lengths of the keys and ciphertexts
-        this.lenSK = this.primitives.OQS_SIG_get_length_secret_key(cSig);
-        this.lenPK = this.primitives.OQS_SIG_get_length_public_key(cSig);
-        this.lenSG = this.primitives.OQS_SIG_get_length_signature(cSig);
+        this.lenSK = Number(this.primitives.OQS_SIG_get_length_secret_key(cSig));
+        this.lenPK = Number(this.primitives.OQS_SIG_get_length_public_key(cSig));
+        this.lenSG = Number(this.primitives.OQS_SIG_get_length_signature(cSig));
+        this.size_t_size = this.primitives.sizeof_size_t();
 
         this.primitives.OQS_SIG_free(cSig)
     }
@@ -256,10 +279,18 @@ export class OQSSig {
         return ptr;
     }
 
+    correctSizeT(val){
+        if (this.size_t_size === 4) {
+            return val;
+        } else {
+            return BigInt(val);
+        }
+    }
+
     //This is a helper function to allocate memory on the heap and schedule it to be zeroed out and freed
     secureMalloc(size, cleanupStack) {
         const ptr = this.malloc(size);
-        cleanupStack.push(() => this.primitives.OQS_MEM_secure_free(ptr, size));
+        cleanupStack.push(() => this.primitives.OQS_MEM_secure_free(this.correctSizeT(ptr), this.correctSizeT(size)));
         return ptr;
     }
 
@@ -280,7 +311,11 @@ export class OQSSig {
             const publicKeyPtr = this.secureMalloc(this.lenPK, cleanupStack);
             const secretKeyPtr = this.secureMalloc(this.lenSK, cleanupStack);
             
-            if (this.primitives.OQS_SIG_keypair(sig, publicKeyPtr, secretKeyPtr) !== OQS_SUCCESS) {
+            if (this.primitives.OQS_SIG_keypair(
+                    this.correctSizeT(sig), 
+                    this.correctSizeT(publicKeyPtr), 
+                    this.correctSizeT(secretKeyPtr)
+                ) !== OQS_SUCCESS) {
                 throw new Error('Failed to generate keypair');
             }
 
@@ -308,18 +343,30 @@ export class OQSSig {
             const secretKeyPtr = this.secureMalloc(this.lenSK, cleanupStack);
             const messagePtr = this.secureMalloc(message.length, cleanupStack);
             const signaturePtr = this.secureMalloc(this.lenSG, cleanupStack);
-            const sigLenPtr = this.secureMalloc(size_t_len, cleanupStack);
+            const sigLenPtr = this.secureMalloc(this.size_t_size, cleanupStack);
 
             this.primitives.HEAPU8.set(secretKey, secretKeyPtr);
             this.primitives.HEAPU8.set(message, messagePtr);
 
-            if (this.primitives.OQS_SIG_sign(sig, signaturePtr, sigLenPtr, messagePtr, message.length, secretKeyPtr) !== OQS_SUCCESS) {
+            if (this.primitives.OQS_SIG_sign(
+                    this.correctSizeT(sig), 
+                    this.correctSizeT(signaturePtr), 
+                    this.correctSizeT(sigLenPtr), 
+                    this.correctSizeT(messagePtr), 
+                    this.correctSizeT(message.length), 
+                    this.correctSizeT(secretKeyPtr)
+                ) !== OQS_SUCCESS) {
                 throw new Error('Failed to sign');
             }
 
-            const sigLenBytes = new Uint8Array(this.primitives.HEAPU8.buffer, sigLenPtr, size_t_len).slice(0);
-            const sigLen = new DataView(sigLenBytes.buffer).getUint32(0, true);
-
+            const sigLenBytes = new Uint8Array(this.primitives.HEAPU8.buffer, sigLenPtr, this.size_t_size).slice(0);
+            let sigLen = 0;
+            if (this.size_t_size === 4) {
+                sigLen = new DataView(sigLenBytes.buffer).getUint32(0, true)
+            } else {
+                sigLen = Number(new DataView(sigLenBytes.buffer).getBigUint64(0, true));
+            }
+            
             const signature = new Uint8Array(this.primitives.HEAPU8.buffer, signaturePtr, sigLen).slice(0);
 
             return signature;
@@ -347,7 +394,14 @@ export class OQSSig {
             this.primitives.HEAPU8.set(message, messagePtr);
             this.primitives.HEAPU8.set(signature, signaturePtr);
 
-            const res = this.primitives.OQS_SIG_verify(sig, messagePtr, message.length, signaturePtr, signature.length, publicKeyPtr);
+            const res = this.primitives.OQS_SIG_verify(
+                    this.correctSizeT(sig), 
+                    this.correctSizeT(messagePtr), 
+                    this.correctSizeT(message.length), 
+                    this.correctSizeT(signaturePtr), 
+                    this.correctSizeT(signature.length), 
+                    this.correctSizeT(publicKeyPtr)
+                );
             if (res !== OQS_SUCCESS) {
                 throw VerificationError;
             }
