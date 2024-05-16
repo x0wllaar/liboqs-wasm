@@ -1,0 +1,159 @@
+<html>
+    <head>
+        <title>LibOQS in Browser!</title>
+
+        <script src="/liboqs.js"></script>
+        <script type="module">
+            import {OQSKem, OQSSig} from '/liboqs_wrapper.mjs';
+    
+    
+            // https://stackoverflow.com/a/50868276
+            const fromHexString = (hexString) => Uint8Array.from(hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))); 
+            const toHexString = (bytes) => bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '');
+    
+            const kemKeygen = async () => {
+                const kem = await OQSKem.create(document.getElementById("kems").value);
+                const kp = kem.keypair();
+                document.getElementById("publicKeyKEM").value = toHexString(kp.publicKey);
+                document.getElementById("publicKeyLengthKEM").value = kp.publicKey.length;
+                document.getElementById("secretKeyKEM").value = toHexString(kp.secretKey);
+                document.getElementById("secretKeyLengthKEM").value = kp.secretKey.length;
+            }
+            document.getElementById("keypairKEM").addEventListener("click", kemKeygen);
+
+            const kemEncap = async () => {
+                const kem = await OQSKem.create(document.getElementById("kems").value);
+                const pk = fromHexString(document.getElementById("publicKeyKEM").value);
+                const encap = kem.encapsulate(pk);
+                document.getElementById("ciphertext").value = toHexString(encap.ciphertext);
+                document.getElementById("ciphertextLength").value = encap.ciphertext.length;
+                document.getElementById("sharedSecret").value = toHexString(encap.sharedSecret);
+                document.getElementById("sharedSecretLength").value = encap.sharedSecret.length;
+            }
+            document.getElementById("encap").addEventListener("click", kemEncap);
+
+            const kemDecap = async () => {
+                const kem = await OQSKem.create(document.getElementById("kems").value);
+                const sk = fromHexString(document.getElementById("secretKeyKEM").value);
+                const ct = fromHexString(document.getElementById("ciphertext").value);
+                const decap = kem.decapsulate(ct, sk);
+                document.getElementById("sharedSecretD").value = toHexString(decap);
+                document.getElementById("sharedSecretDLength").value = decap.length;
+            }
+            document.getElementById("decap").addEventListener("click", kemDecap);
+
+
+            const sigKeygen = async () => {
+                const sig = await OQSSig.create(document.getElementById("sigs").value);
+                const kp = sig.keypair();
+                document.getElementById("publicKeySIG").value = toHexString(kp.publicKey);
+                document.getElementById("publicKeyLengthSIG").value = kp.publicKey.length;
+                document.getElementById("secretKeySIG").value = toHexString(kp.secretKey);
+                document.getElementById("secretKeyLengthSIG").value = kp.secretKey.length;
+            }
+            document.getElementById("keypairSIG").addEventListener("click", sigKeygen);
+
+            const sigSign = async () => {
+                const sig = await OQSSig.create(document.getElementById("sigs").value);
+                const msg = document.getElementById("msg").value;
+                const msgBytes = new TextEncoder().encode(msg);
+                const sk = fromHexString(document.getElementById("secretKeySIG").value);
+                const sigBytes = sig.sign(msgBytes, sk);
+                document.getElementById("signature").value = toHexString(sigBytes);
+                document.getElementById("signatureLength").value = sigBytes.length;
+            }
+            document.getElementById("sign").addEventListener("click", sigSign);
+
+            const sigVerify = async () => {
+                const sig = await OQSSig.create(document.getElementById("sigs").value);
+                const msg = document.getElementById("msg").value;
+                const msgBytes = new TextEncoder().encode(msg);
+                const pk = fromHexString(document.getElementById("publicKeySIG").value);
+                const sigBytes = fromHexString(document.getElementById("signature").value);
+                try{
+                    const good = sig.verify(msgBytes, sigBytes, pk);
+                    document.getElementById("sigGood").value = "GOOD";
+                } catch(e){
+                    document.getElementById("sigGood").value = "BAD";
+                }
+            }
+            document.getElementById("verify").addEventListener("click", sigVerify);
+        </script>
+
+    </head>
+    <body>
+        <h1>KEM</h1>
+        <p>
+            KEM type: <select name="kems" id="kems">
+                <option value="ML-KEM-1024">ML-KEM-1024</option>
+                <option value="ML-KEM-768">ML-KEM-768</option>
+                <option value="HQC-128">HQC-128</option>
+                <option value="HQC-256">HQC-256</option>
+              </select>
+        </p>
+        <p>
+            <p>
+                <h2> Key Pair Generation </h2>
+                <button id="keypairKEM">Generate Key Pair</button><br>
+                Public Key: <br>
+                <textarea id="publicKeyKEM" rows="10" cols="86"></textarea><br>
+                Public Key Length: <input id="publicKeyLengthKEM"></input><br>
+
+                Secret Key: <br>
+                <textarea id="secretKeyKEM" rows="10" cols="86"></textarea><br>
+                Secret Key Length: <input id="secretKeyLengthKEM"></input><br>
+            </p>
+            <p>
+                <h2> Encapsulation </h2>
+                <button id="encap">Encapsulate</button><br>
+                Ciphertext: <br>
+                <textarea id="ciphertext" rows="10" cols="86"></textarea><br>
+                Ciphertext Length: <input id="ciphertextLength"></input><br>
+                Shared Secret: <br>
+                <textarea id="sharedSecret" rows="10" cols="86"></textarea><br>
+                Shared Secret Length: <input id="sharedSecretLength"></input><br>
+            </p>
+            <p>
+                <h2> Decapsulation </h2>
+                <button id="decap">Decapsulate</button><br>
+                Shared Secret: <br>
+                <textarea id="sharedSecretD" rows="10" cols="86"></textarea><br>
+                Shared Secret Length: <input id="sharedSecretDLength"></input><br>
+            </p>
+        </p>
+        <hr>
+        <h1>Signature</h1>
+        <p>
+            Signature type: <select name="sigs" id="sigs">
+                <option value="ML-DSA-44">ML-DSA-44</option>
+                <option value="ML-DSA-87">ML-DSA-87</option>
+                <option value="Falcon-1024">Falcon-1024</option>
+                <option value="SPHINCS+-SHAKE-128s-simple">SPHINCS+-SHAKE-128s-simple</option>
+              </select><br>
+        </p>
+        <p>
+            <h2> Key Pair Generation </h2>
+            <button id="keypairSIG">Generate Key Pair</button><br>
+            Public Key: <br>
+            <textarea id="publicKeySIG" rows="10" cols="86"></textarea><br>
+            Public Key Length: <input id="publicKeyLengthSIG"></input><br>
+
+            Secret Key: <br>
+            <textarea id="secretKeySIG" rows="10" cols="86"></textarea><br>
+            Secret Key Length: <input id="secretKeyLengthSIG"></input><br>
+        </p>
+        <p>
+            <h2> Signature Generation </h2>
+            Message: <input id="msg" value="Hello World!" size="128"></input><br>
+            <button id="sign">Sign</button><br>
+            Signature: <br>
+            <textarea id="signature" rows="10" cols="86"></textarea><br>
+            Signature Length: <input id="signatureLength"></input><br>
+        </p>
+        <p>
+            <h2> Signature Verification </h2>
+            <button id="verify">Verify</button><br>
+            Verification result: <input id="sigGood">
+        </p>
+    </body>
+</html>
