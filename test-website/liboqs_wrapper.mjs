@@ -132,6 +132,11 @@ export class OQSKem {
     encapsulate(publicKey) {
         const cleanupStack = [];
         try {
+
+            if (publicKey.length !== this.lenPK) {
+                throw new Error('Invalid public key length');
+            }
+
             const kem = this.newKemInstance(cleanupStack);
 
             const publicKeyPtr = this.malloc(this.lenPK);
@@ -157,6 +162,14 @@ export class OQSKem {
     decapsulate(ciphertext, secretKey) {
         const cleanupStack = [];
         try {
+
+            if (secretKey.length !== this.lenSK) {
+                throw new Error('Invalid secret key length');
+            }
+            if (ciphertext.length !== this.lenCT) {
+                throw new Error('Invalid ciphertext length');
+            }
+
             const kem = this.newKemInstance(cleanupStack);
 
             const secretKeyPtr = this.secureMalloc(this.lenSK, cleanupStack);
@@ -285,6 +298,11 @@ export class OQSSig {
     sign(message, secretKey) {
         const cleanupStack = [];
         try {
+
+            if (secretKey.length !== this.lenSK) {
+                throw new Error('Invalid secret key length');
+            }
+
             const sig = this.newSigInstance(cleanupStack);
 
             const secretKeyPtr = this.secureMalloc(this.lenSK, cleanupStack);
@@ -314,6 +332,11 @@ export class OQSSig {
     verify(message, signature, publicKey) {
         const cleanupStack = [];
         try {
+
+            if (publicKey.length !== this.lenPK) {
+                throw new Error('Invalid public key length');
+            }
+
             const sig = this.newSigInstance(cleanupStack);
 
             const publicKeyPtr = this.secureMalloc(this.lenPK, cleanupStack);
