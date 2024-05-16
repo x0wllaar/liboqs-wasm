@@ -21,6 +21,29 @@ OUT_DIRECTORY="${OQS_OUT_DIR:=/out}"
 OQS_LOCATION="${OQS_SOURCE:=/DOES/NOT/EXIST}"
 #We give the user the ability to choose where to include the JS addons from
 JS_ADDONS_LOCATION="${ADDONS_SOURCE:=/addons}"
+#We give the user the ability to choose whether and how to use Memory64
+OQS_MEMORY64_STR="${OQS_WASM64:=off}"
+
+case "$OQS_MEMORY64_STR" in
+    "off")
+        OQS_MEMORY64_ARG=" "
+        OQS_WASM_BIGINT=" " #We don't need bigints if we don't use memory64
+        ;;
+    "real")
+        #This is a weird bug in emcmake, it just ignores the value of MEMORY64 and forces sizeof_void_p to 4
+        #Need to specify it twice to make it work
+        OQS_MEMORY64_ARG="-sMEMORY64=1"
+        OQS_WASM_BIGINT="-sWASM_BIGINT"
+        ;;
+    "fake")
+        OQS_MEMORY64_ARG="-sMEMORY64=2"
+        OQS_WASM_BIGINT="-sWASM_BIGINT"
+        ;;
+    *)
+        echo "Invalid value for OQS_WASM64: $OQS_MEMORY64_STR, accepted values are off, real, fake"
+        exit 1
+        ;;
+esac
 
 #Define the functions we want to export from the WASM module
 #We only really care about the functions that use the heap
@@ -60,15 +83,21 @@ mkdir build
 cd build
 
 
+export CFLAGS="$OQS_MEMORY64_ARG"
+export LDFLAGS="$OQS_MEMORY64_ARG $OQS_WASM_BIGINT -sSTACK_SIZE=16mb"
 emcmake cmake -GNinja \
     -DOQS_USE_OPENSSL=OFF \
     -DOQS_PERMIT_UNSUPPORTED_ARCHITECTURE=ON \
-    -DOQS_ALGS_ENABLED=All ..
+    -DOQS_ALGS_ENABLED=All \
+    -DCMAKE_C_FLAGS:STRING="$CFLAGS" \
+    -DEMSCRIPTEN_SYSTEM_PROCESSOR=wasm \
+    ..
 emmake ninja
 
 mkdir addons
 cd addons
 emcc -c \
+    $CFLAGS \
     -O3 \
     -I "$(pwd)/../include" \
     "$JS_ADDONS_LOCATION"/*.c
@@ -82,7 +111,7 @@ cd lib
 emcc -o liboqs.js \
     -s EXPORTED_FUNCTIONS=$ALL_EXPORTS \
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap \
-    -sSTACK_SIZE=16mb \
+    $LDFLAGS \
     -sWASM=1 \
     -sMODULARIZE -s 'EXPORT_NAME="CreateLibOQS"' \
     liboqs.a *.o
