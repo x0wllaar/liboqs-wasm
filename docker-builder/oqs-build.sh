@@ -56,7 +56,7 @@ KEM_STRUCT_FUNCS="_OQS_KEM_get_method_name,_OQS_KEM_get_alg_version,_OQS_KEM_get
 #SIG struct accessors
 SIG_STRUCT_FUNCS="_OQS_SIG_get_method_name,_OQS_SIG_get_alg_version,_OQS_SIG_get_euf_cma,_OQS_SIG_get_length_public_key,_OQS_SIG_get_length_secret_key,_OQS_SIG_get_length_signature"
 #Other functions that we need to export
-OTHER_EXPORTS="_main"
+OTHER_EXPORTS="_main,_sizeof_size_t"
 
 ALL_EXPORTS="$KEM_FUNCS,$SIG_FUNCS,$MEM_FUNCS,$KEM_STRUCT_FUNCS,$SIG_STRUCT_FUNCS,$OTHER_EXPORTS"
 
